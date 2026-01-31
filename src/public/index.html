@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRC Scouting App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img id="logo" src="images/FirstLogo.png" alt="Description of the image">
+            <h1>FRC Scouting App</h1>
+            <p>Record match data and team performance</p>
+        </header>
+
+        <!-- Main Menu -->
+        <div id="main-menu" class="main-menu">
+            <h2 style="color: white;">Select</h2>
+            <div id="scouting-types-grid" class="scouting-types-grid"></div>
+        </div>
+
+        <!-- Scouting Form (Pre-Match or Match - input only, no View Data tab) -->
+        <div id="scouting-interface" style="display: none;">
+            <div class="back-button-container">
+                <button onclick="showMainMenu()" class="btn btn-secondary">← Back to Menu</button>
+            </div>
+            <form id="scouting-form">
+                <div id="form-fields"></div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Submit Scouting Data</button>
+                    <button type="reset" class="btn btn-secondary">Clear Form</button>
+                </div>
+            </form>
+            <div id="form-message"></div>
+        </div>
+
+        <!-- View Data (separate section) -->
+        <div id="view-data-section" style="display: none;">
+            <div class="back-button-container">
+                <button onclick="showMainMenu()" class="btn btn-secondary">← Back to Menu</button>
+            </div>
+            <div class="data-controls">
+                <label for="view-data-type">Data type:</label>
+                <select id="view-data-type" onchange="onViewDataTypeChange()"></select>
+                <button onclick="loadData()" class="btn btn-primary">Refresh Data</button>
+                <div id="auth-area" class="auth-area">
+                    <span id="auth-status"></span>
+                    <a id="auth-link" href="#" class="btn btn-primary auth-btn" style="display: none;">Sign in with Google</a>
+                    <button id="logout-btn" class="btn btn-secondary auth-btn" style="display: none;" onclick="logout()">Sign out</button>
+                </div>
+            </div>
+            <p id="auth-hint" class="auth-hint" style="display: none;">Sign in with Google to edit or remove data(must be an allowed user).</p>
+            <div id="data-message"></div>
+            <div id="data-container">
+                <p class="loading">Loading data...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit modal -->
+    <div id="edit-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Entry</h3>
+                <button type="button" class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <form id="edit-form">
+                <div id="edit-form-fields"></div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
