@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FRC Scouting App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img id="logo" src="images/FirstLogo.png" alt="Description of the image">
+            <h1>FRC Scouting App</h1>
+            <p>Record match data and team performance</p>
+        </header>
+
+        <!-- Main Menu -->
+        <div id="main-menu" class="main-menu">
+            <h2 style="color: white;">Select</h2>
+            <div id="scouting-types-grid" class="scouting-types-grid"></div>
+        </div>
+
+        <!-- Scouting Form (Pre-Match or Match - input only, no View Data tab) -->
+        <div id="scouting-interface" style="display: none;">
+            <div class="back-button-container">
+                <button onclick="showMainMenu()" class="btn btn-secondary">← Back to Menu</button>
+            </div>
+            <form id="scouting-form">
+                <div id="form-fields"></div>
+                <p id="form-submit-hint" class="form-submit-hint" style="display: none;"></p>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Submit Scouting Data</button>
+                    <button type="button" id="create-qr-btn" class="btn btn-secondary">Create QR Code</button>
+                    <button type="reset" class="btn btn-secondary">Clear Form</button>
+                </div>
+            </form>
+            <div id="form-message"></div>
+        </div>
+
+        <!-- View Data (separate section) -->
+        <div id="view-data-section" style="display: none;">
+            <div class="back-button-container">
+                <button onclick="showMainMenu()" class="btn btn-secondary">← Back to Menu</button>
+            </div>
+            <div class="data-controls">
+                <label for="view-data-type">Data type:</label>
+                <select id="view-data-type" onchange="onViewDataTypeChange()"></select>
+                <button onclick="loadData()" class="btn btn-primary">Refresh Data</button>
+                <div id="auth-area" class="auth-area">
+                    <span id="auth-status"></span>
+                    <a id="auth-link" href="#" class="btn btn-primary auth-btn" style="display: none;">Sign in with Google</a>
+                    <button id="logout-btn" class="btn btn-secondary auth-btn" style="display: none;" onclick="logout()">Sign out</button>
+                </div>
+            </div>
+            <p id="auth-hint" class="auth-hint" style="display: none;">Sign in with Google to edit or remove data(must be an allowed user).</p>
+            <div id="data-message"></div>
+            <div id="data-container">
+                <p class="loading">Loading data...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- QR code modal -->
+    <div id="qr-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>QR Code – Scan to submit this data</h3>
+                <button type="button" class="modal-close" onclick="closeQRModal()">&times;</button>
+            </div>
+            <div id="qr-code-container" class="qr-code-container"></div>
+            <p class="qr-hint">Someone with upload access can scan this to submit the data.</p>
+        </div>
+    </div>
+
+    <!-- Scanned payload view (when opening link from QR) -->
+    <div id="payload-view-section" style="display: none;">
+        <div class="back-button-container">
+            <button onclick="closePayloadView()" class="btn btn-secondary">← Back</button>
+        </div>
+        <h2>Scanned submission</h2>
+        <div id="payload-data-display"></div>
+        <div id="payload-submit-area" style="display: none;">
+            <button type="button" id="payload-submit-btn" class="btn btn-primary">Submit this data</button>
+        </div>
+        <p id="payload-sign-in-hint" class="auth-hint" style="display: none;">Sign in with an account that has upload access to submit this data. <a id="payload-sign-in-link" href="#" class="auth-btn">Sign in with Google</a></p>
+        <div id="payload-message"></div>
+    </div>
+
+    <!-- User management section -->
+    <div id="user-management-section" style="display: none;">
+        <div class="back-button-container">
+            <button onclick="closeUserManagement()" class="btn btn-secondary">← Back to Menu</button>
+        </div>
+        <h2>Manage Users</h2>
+        <p class="auth-hint">Add users by email (they must sign in with Google). Role: <strong>admin</strong> = full access + user management; <strong>upload</strong> = submit and upload only.</p>
+        <div class="user-add-form">
+            <input type="email" id="new-user-email" placeholder="Email address" />
+            <select id="new-user-role">
+                <option value="upload">Upload only</option>
+                <option value="admin">Admin</option>
+            </select>
+            <button type="button" class="btn btn-primary" onclick="addUser()">Add user</button>
+        </div>
+        <div id="users-list-container"></div>
+        <div id="user-management-message"></div>
+    </div>
+
+    <!-- Edit modal -->
+    <div id="edit-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Entry</h3>
+                <button type="button" class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <form id="edit-form">
+                <div id="edit-form-fields"></div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+

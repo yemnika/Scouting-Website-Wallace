@@ -1,0 +1,7 @@
+node_modules/
+scouting.db
+uploads/
+.env
+.DS_Store
+*.log
+
