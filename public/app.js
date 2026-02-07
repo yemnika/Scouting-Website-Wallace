@@ -212,7 +212,7 @@ function renderScoutingTypes(types) {
     const viewDataCard = document.createElement('div');
     viewDataCard.className = 'scouting-type-card view-data-card';
     viewDataCard.onclick = () => openViewDataSection(Object.keys(types)[0] || 'prematch');
-    viewDataCard.innerHTML = '<h3>📊 View Data</h3><p>View, edit, or remove scouting data</p>';
+    viewDataCard.innerHTML = '<h3>View Data</h3><p>View, edit, or remove scouting data</p>';
     grid.appendChild(viewDataCard);
 }
 

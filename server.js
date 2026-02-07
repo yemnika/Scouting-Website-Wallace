@@ -5,7 +5,7 @@ const bodyParser = require('body-parser');
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const sqlite3 = require('sqlite3').verbose();
+const { openDatabase } = require('./lib/sqlite-wrapper');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -79,15 +79,8 @@ try {
   process.exit(1);
 }
 
-// Initialize database
-const db = new sqlite3.Database('scouting.db', (err) => {
-  if (err) {
-    console.error('Error opening database:', err);
-  } else {
-    console.log('Connected to SQLite database');
-    initializeDatabase();
-  }
-});
+// Database (set after openDatabase callback)
+let db;
 
 function getTableColumns(tableName) {
   return new Promise((resolve, reject) => {
@@ -578,34 +571,42 @@ function getPublicIP(callback) {
   });
 }
 
-// Start server
-const HOST = '0.0.0.0'; // Listen on all network interfaces
-app.listen(PORT, HOST, () => {
-  const localIP = getLocalIP();
-  console.log(`FRC Scouting Server running!`);
-  console.log(`Local access: http://localhost:${PORT}`);
-  console.log(`Network access: http://${localIP}:${PORT}`);
-  
-  // Try to get public IP for port forwarding info
-  getPublicIP((publicIP) => {
-    if (publicIP) {
-      console.log(`\nFor external access (after port forwarding):`);
-      console.log(`Public IP: http://${publicIP}:${PORT}`);
-      console.log(`Run 'npm run setup-port-forward' for setup instructions\n`);
-    }
+// Open database and start server
+const HOST = process.env.HOST || '0.0.0.0';
+openDatabase(path.join(__dirname, 'scouting.db'), (err, database) => {
+  if (err) {
+    console.error('Error opening database:', err);
+    process.exit(1);
+  }
+  db = database;
+  console.log('Connected to SQLite database');
+  initializeDatabase().then(() => {
+    app.listen(PORT, HOST, () => {
+      const localIP = getLocalIP();
+      console.log(`FRC Scouting Server running!`);
+      console.log(`Local access: http://localhost:${PORT}`);
+      console.log(`Network access: http://${localIP}:${PORT}`);
+      getPublicIP((publicIP) => {
+        if (publicIP) {
+          console.log(`\nFor external access (after port forwarding):`);
+          console.log(`Public IP: http://${publicIP}:${PORT}`);
+          console.log(`Run 'npm run setup-port-forward' for setup instructions\n`);
+        }
+      });
+      console.log(`Open http://localhost:${PORT} in your browser`);
+    });
+  }).catch((initErr) => {
+    console.error('Database initialization failed:', initErr);
+    process.exit(1);
   });
-  
-  console.log(`Open http://localhost:${PORT} in your browser`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
+  if (!db) return process.exit(0);
   db.close((err) => {
-    if (err) {
-      console.error('Error closing database:', err);
-    } else {
-      console.log('Database connection closed');
-    }
+    if (err) console.error('Error closing database:', err);
+    else console.log('Database connection closed');
     process.exit(0);
   });
 });

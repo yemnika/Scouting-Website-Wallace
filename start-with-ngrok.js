@@ -1,81 +1,105 @@
 // Start server and ngrok tunnel together
 const { spawn } = require('child_process');
-const ngrok = require('ngrok');
+const path = require('path');
+const fs = require('fs');
+const net = require('net');
 
-const PORT = 3000;
+const DEFAULT_PORT = 3000;
+
+// Find an available port (avoid EADDRINUSE if something is already on 3000)
+function findAvailablePort(startPort, callback) {
+  const server = net.createServer();
+  server.listen(startPort, '0.0.0.0', () => {
+    const port = server.address().port;
+    server.close(() => callback(port));
+  });
+  server.on('error', () => findAvailablePort(startPort + 1, callback));
+}
+
+// Check if the ngrok package has a working binary (postinstall may not have run or may have failed)
+const ngrokBinDir = path.join(__dirname, 'node_modules', 'ngrok', 'bin');
+const ngrokExe = path.join(ngrokBinDir, process.platform === 'win32' ? 'ngrok.exe' : 'ngrok');
+const hasBundledNgrok = fs.existsSync(ngrokExe);
 
 console.log('\n=== Starting FRC Scouting Server with ngrok ===\n');
 
-// Start the server
-console.log('Starting server on port', PORT, '...\n');
-const server = spawn('node', ['server.js'], {
-  stdio: 'inherit',
-  shell: true
+findAvailablePort(Number(process.env.PORT) || DEFAULT_PORT, (PORT) => {
+  if (PORT !== DEFAULT_PORT) {
+    console.log(`Port ${DEFAULT_PORT} in use, using port ${PORT} instead.\n`);
+  }
+
+  // Start the server with chosen port
+  console.log('Starting server on port', PORT, '...\n');
+  const server = spawn('node', ['server.js'], {
+    stdio: 'inherit',
+    shell: true,
+    env: { ...process.env, PORT: String(PORT) }
+  });
+  startNgrokAfterDelay(PORT, server);
 });
 
-// Wait a bit for server to start, then start ngrok
-setTimeout(async () => {
-  try {
-    console.log('\n=== Starting ngrok tunnel ===\n');
-    // Try to get authtoken from environment or config
-    const authtoken = process.env.NGROK_AUTHTOKEN || 
-                     (require('fs').existsSync(require('path').join(require('os').homedir(), '.ngrok2', 'ngrok.yml')) 
-                      ? null : null); // Will use config file if exists
-    
-    const connectOptions = { addr: PORT };
-    if (authtoken) {
-      connectOptions.authtoken = authtoken;
+function startNgrokAfterDelay(PORT, server) {
+  let ngrokModule = null;
+
+  process.on('SIGINT', async () => {
+    console.log('\n\nStopping server and ngrok...');
+    if (ngrokModule) {
+      try {
+        await ngrokModule.kill();
+      } catch (e) { /* ignore */ }
     }
-    
-    const url = await ngrok.connect(connectOptions);
-    
-    console.log('\n✅ ngrok tunnel active!');
-    console.log(`\n🌐 Public URL: ${url}`);
-    console.log(`\nShare this URL with anyone: ${url}`);
-    console.log('\nPress Ctrl+C to stop both server and tunnel\n');
-    
-    // Also show ngrok web interface
-    console.log('📊 ngrok web interface: http://localhost:4040\n');
-    
-  } catch (error) {
-    console.error('\n❌ Error starting ngrok:', error.message);
-    console.log('\nTrying alternative method...');
-    console.log('Make sure ngrok is installed: npm install -g ngrok');
-    console.log('Or download from: https://ngrok.com/download\n');
-    
-    // Fallback: try using ngrok executable
-    const ngrokProcess = spawn('ngrok', ['http', PORT.toString()], {
-      stdio: 'inherit',
-      shell: true
-    });
-    
-    ngrokProcess.on('error', (err) => {
-      console.error('Could not start ngrok. Please install it manually.');
-      console.log('Download from: https://ngrok.com/download');
-    });
-    
-    process.on('SIGINT', () => {
-      ngrokProcess.kill();
-      server.kill();
-      process.exit(0);
-    });
-  }
-}, 2000);
+    server.kill();
+    process.exit(0);
+  });
 
-// Handle cleanup
-process.on('SIGINT', async () => {
-  console.log('\n\nStopping server and ngrok...');
-  try {
-    await ngrok.kill();
-  } catch (e) {
-    // Ignore errors
-  }
-  server.kill();
-  process.exit(0);
-});
+  server.on('error', (error) => {
+    console.error('Error starting server:', error);
+    process.exit(1);
+  });
 
-server.on('error', (error) => {
-  console.error('Error starting server:', error);
-  process.exit(1);
-});
+  // Wait for server to start, then start ngrok
+  setTimeout(async () => {
+    if (!hasBundledNgrok) {
+      console.log('\n=== Starting ngrok tunnel (using system ngrok) ===\n');
+      console.log('Tip: Install ngrok from https://ngrok.com/download if needed.\n');
+      const ngrokProcess = spawn('ngrok', ['http', PORT.toString()], {
+        stdio: 'inherit',
+        shell: true
+      });
+      ngrokProcess.on('error', (err) => {
+        console.error('\n❌ Could not start ngrok:', err.message);
+        console.log('Install: https://ngrok.com/download');
+        console.log('Or run: node node_modules/ngrok/postinstall.js\n');
+      });
+      return;
+    }
+
+    try {
+      ngrokModule = require('ngrok');
+      console.log('\n=== Starting ngrok tunnel ===\n');
+      const authtoken = process.env.NGROK_AUTHTOKEN;
+      const connectOptions = { addr: PORT, proto: 'http' };
+      if (authtoken) connectOptions.authtoken = authtoken;
+
+      const url = await ngrokModule.connect(connectOptions);
+
+      console.log('\n✅ ngrok tunnel active!');
+      console.log(`\n🌐 Public URL: ${url}`);
+      console.log(`\nShare this URL with anyone: ${url}`);
+      console.log('\nPress Ctrl+C to stop both server and tunnel\n');
+      console.log('📊 ngrok web interface: http://localhost:4040\n');
+    } catch (error) {
+      console.error('\n❌ Error starting ngrok:', error.message);
+      console.log('\nTrying system ngrok...');
+      const ngrokProcess = spawn('ngrok', ['http', PORT.toString()], {
+        stdio: 'inherit',
+        shell: true
+      });
+      ngrokProcess.on('error', () => {
+        console.log('\nInstall ngrok: https://ngrok.com/download');
+        console.log('Or run: node node_modules/ngrok/postinstall.js\n');
+      });
+    }
+  }, 2000);
+}
 

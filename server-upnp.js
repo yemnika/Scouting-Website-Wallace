@@ -2,7 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const sqlite3 = require('sqlite3').verbose();
+const { openDatabase } = require('./lib/sqlite-wrapper');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -44,26 +44,17 @@ try {
   process.exit(1);
 }
 
-// Initialize database
-const db = new sqlite3.Database('scouting.db', (err) => {
-  if (err) {
-    console.error('Error opening database:', err);
-  } else {
-    console.log('Connected to SQLite database');
-    initializeDatabase();
-  }
-});
+// Database (set after openDatabase callback)
+let db;
 
 // Create tables based on scouting type configurations
 function initializeDatabase() {
   const scoutingTypes = scoutingConfig.scoutingTypes || {};
-  
-  Object.keys(scoutingTypes).forEach(typeKey => {
+  const promises = Object.keys(scoutingTypes).map(typeKey => {
     const typeConfig = scoutingTypes[typeKey];
     const fields = typeConfig.fields || [];
     const tableName = typeConfig.tableName || `${typeKey}_data`;
     
-    // Build column definitions
     const columns = [
       'id INTEGER PRIMARY KEY AUTOINCREMENT',
       'timestamp DATETIME DEFAULT CURRENT_TIMESTAMP'
@@ -71,13 +62,9 @@ function initializeDatabase() {
     
     fields.forEach(field => {
       let columnType = 'TEXT';
-      if (field.type === 'number') {
-        columnType = 'REAL';
-      } else if (field.type === 'checkbox') {
-        columnType = 'INTEGER';
-      } else if (field.type === 'file') {
-        columnType = 'TEXT'; // Store file path
-      }
+      if (field.type === 'number') columnType = 'REAL';
+      else if (field.type === 'checkbox') columnType = 'INTEGER';
+      else if (field.type === 'file') columnType = 'TEXT';
       columns.push(`${field.id} ${columnType}`);
     });
     
@@ -87,14 +74,19 @@ function initializeDatabase() {
       )
     `;
     
-    db.run(createTableSQL, (err) => {
-      if (err) {
-        console.error(`Error creating table ${tableName}:`, err);
-      } else {
-        console.log(`Database table ${tableName} initialized`);
-      }
+    return new Promise((resolve, reject) => {
+      db.run(createTableSQL, (err) => {
+        if (err) {
+          console.error(`Error creating table ${tableName}:`, err);
+          reject(err);
+        } else {
+          console.log(`Database table ${tableName} initialized`);
+          resolve();
+        }
+      });
     });
   });
+  return Promise.all(promises);
 }
 
 // API Routes
@@ -379,49 +371,51 @@ function setupUPnP() {
   }
 }
 
-// Start server
-const HOST = '0.0.0.0'; // Listen on all network interfaces
-app.listen(PORT, HOST, () => {
-  const localIP = getLocalIP();
-  console.log(`FRC Scouting Server running!`);
-  console.log(`Local access: http://localhost:${PORT}`);
-  console.log(`Network access: http://${localIP}:${PORT}`);
-  
-  // Try UPnP automatic port forwarding
-  console.log(`\nAttempting automatic port forwarding via UPnP...`);
-  setupUPnP();
-  
-  // Also try to get public IP for reference
-  getPublicIP((publicIP) => {
-    if (publicIP) {
-      console.log(`\nYour public IP: ${publicIP}`);
-      if (!portMapping) {
-        console.log(`If UPnP didn't work, you can manually forward port ${PORT} to ${localIP}:${PORT}`);
-      }
-    }
+// Open database and start server
+const HOST = process.env.HOST || '0.0.0.0';
+openDatabase(path.join(__dirname, 'scouting.db'), (err, database) => {
+  if (err) {
+    console.error('Error opening database:', err);
+    process.exit(1);
+  }
+  db = database;
+  console.log('Connected to SQLite database');
+  initializeDatabase().then(() => {
+    app.listen(PORT, HOST, () => {
+      const localIP = getLocalIP();
+      console.log(`FRC Scouting Server running!`);
+      console.log(`Local access: http://localhost:${PORT}`);
+      console.log(`Network access: http://${localIP}:${PORT}`);
+      console.log(`\nAttempting automatic port forwarding via UPnP...`);
+      setupUPnP();
+      getPublicIP((publicIP) => {
+        if (publicIP) {
+          console.log(`\nYour public IP: ${publicIP}`);
+          if (!portMapping) {
+            console.log(`If UPnP didn't work, you can manually forward port ${PORT} to ${localIP}:${PORT}`);
+          }
+        }
+      });
+      console.log(`\nOpen http://localhost:${PORT} in your browser`);
+    });
+  }).catch((initErr) => {
+    console.error('Database initialization failed:', initErr);
+    process.exit(1);
   });
-  
-  console.log(`\nOpen http://localhost:${PORT} in your browser`);
 });
 
 // Cleanup UPnP mapping on exit
 process.on('SIGINT', () => {
   if (upnpClient && portMapping) {
     upnpClient.removeMapping(portMapping, (err) => {
-      if (err) {
-        console.log('Note: Could not remove UPnP mapping on exit');
-      } else {
-        console.log('UPnP port mapping removed');
-      }
+      if (err) console.log('Note: Could not remove UPnP mapping on exit');
+      else console.log('UPnP port mapping removed');
     });
   }
-  
+  if (!db) return process.exit(0);
   db.close((err) => {
-    if (err) {
-      console.error('Error closing database:', err);
-    } else {
-      console.log('Database connection closed');
-    }
+    if (err) console.error('Error closing database:', err);
+    else console.log('Database connection closed');
     process.exit(0);
   });
 });

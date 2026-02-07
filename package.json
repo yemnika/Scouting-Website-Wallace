@@ -30,7 +30,7 @@
     "nat-upnp": "^1.0.1",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
-    "sqlite3": "^5.1.6"
+    "sql.js": "^1.10.0"
   },
   "devDependencies": {
     "ngrok": "^5.0.0-beta.2"
